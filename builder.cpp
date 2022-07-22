@@ -1,6 +1,4 @@
-#ifndef _BUILDER
-#define _BUILDER
-
+#pragma once
 #include <iostream>
 #include <gtkmm.h>
 
@@ -10,9 +8,8 @@ public:
     Glib::RefPtr<Gtk::Builder> constructor;
     builder();
     ~builder();
-}*build;
+}*login,*wizar;
 
 builder::builder(){
     constructor = Gtk::Builder::create_from_file("window_main.glade");
 }
-#endif

@@ -1,4 +1,5 @@
 #include <gtkmm.h>
+#include "coneccion.cpp"
 
 class Login
 {
@@ -8,6 +9,7 @@ private:
     Gtk::Entry *ety_usuario;
     Gtk::Entry *ety_contrasena;
     Gtk::Button *btn_sesion;
+    coneccion *conn = new coneccion();
 public:
     Login();
     ~Login();
@@ -17,4 +19,5 @@ protected:
     void conecta_senales();
     void establece_widgets();
     void ver_resultado();
+    void comprueba_configuracion();
 }*v1;
