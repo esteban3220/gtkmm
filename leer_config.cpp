@@ -1,35 +1,63 @@
 #include "leer_config.hpp"
+#include <fstream>
 
-leer_config::leer_config()
+void config::escribe_configuracion(std::string _user, std::string _server, std::string _password)
 {
-    conf p = new config();
-    std::ifstream archivoIn("config.bin", std::ios::in | std::ios::binary);
-	if (!archivoIn) {
-		std::cerr << "Info: Archivo de Configuracion no encontrado... Ayudante de configuracion en ejecucion." << std::endl;
-		return;
-	}
-	archivoIn.seekg(0, std::ios::beg);
-	archivoIn.read(reinterpret_cast<char *>(&p), sizeof(config));
-	while (!archivoIn.eof())
+	std::cout << std::endl;
+	std::ifstream archivo("config.bin");
+	if (archivo.good())
 	{
-		user = p->usuario;
-        server = p->servidor;
-        password = p->contrasena;
-		archivoIn.read(reinterpret_cast<char *>(&p), sizeof(config));
+		if (remove("config.bin") != 0)
+			perror("Error al borrar archivo!.");
+		else
+		{
+			puts("El archivo conexíon reescriot!");
+			myFile.adding_string(_user.c_str());
+			myFile.adding_string(_server.c_str());
+			myFile.adding_string(_password.c_str());
+			myFile.save();
+		}
 	}
-	archivoIn.close();
+	else
+	{
+		puts("El archivo conexíon creado con exito!");
+		myFile.adding_string(_user.c_str());
+		myFile.adding_string(_server.c_str());
+		myFile.adding_string(_password.c_str());
+		myFile.save();
+	}
 }
 
-leer_config::~leer_config()
+void config::lee_configuracion()
 {
+	myFile.init();
+	this->user = myFile.get_string(1);
+	this->server = myFile.get_string(2);
+	this->password = myFile.get_string(3);
 }
 
-std::string leer_config::get_password(){
-    return this->password;
+config::config()
+{
+	std::ifstream archivo("config.bin");
+	if (archivo.good())
+	{
+		std::cout << "Info: Archivo de configuracíon encontrado." << std::endl;
+		lee_configuracion();
+	}
+	else
+	{
+		std::cerr << "Info: No hay archivo de configuracíon." << std::endl;
+	}
 }
-std::string leer_config::get_user(){
-    return this->user;
+std::string config::get_password()
+{
+	return password;
 }
-std::string leer_config::get_server(){
-    return this->server;
+std::string config::get_user()
+{
+	return user;
+}
+std::string config::get_server()
+{
+	return server;
 }

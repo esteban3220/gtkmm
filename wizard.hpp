@@ -16,12 +16,10 @@ private:
     Gtk::Entry *ety_dir_bien;
     Gtk::Entry *ety_rfc_bien;
     Gtk::Button *btn_comprobar;
-    Gtk::Button *btn_instalar;
+    Gtk::Button *btn_instalar,*btn_aplica;
     Gtk::Button *pag_sig;
-    Gtk::Button *pag_atras;
+    Gtk::Button *pag_atras,*btn_user;
     Gtk::Button *btn_cancelar_stp;
-    Gtk::FileChooser *file;
-    Gtk::Image *image;
     Gtk::StackSidebar *pila_stp;
     Gtk::Stack *pasos;
     Gtk::Box *pag_bienvenido;
@@ -31,7 +29,7 @@ private:
     Gtk::Box *pag_sumario;
     Gtk::Revealer *info_bar_bien, *progrees_bd_container;
     Gtk::InfoBar *bar_bien;
-    Gtk::Label *lbl_info_bien;
+    Gtk::Label *lbl_info_bien,*lbl_emp_bien,*lbl_num_bien,*lbl_dir_bien,*lbl_rfc_bien;
     Gtk::ProgressBar *progrees_bd;
     bool m_bActivityMode;
     sigc::connection m_connection_timeout;
@@ -52,4 +50,14 @@ protected:
     void instalar_bd_ok();
     void cerrar_info_bar(int response);
     bool on_timeout();
+    void on_ety_user_bien_changed();
+    void on_ety_contrasena1_changed();
+    void on_ety_contrasena2_changed();
+    void btn_user_clicked();
+    void on_ety_emp_bien_changed();
+    void on_ety_num_bien_changed();
+    void on_ety_dir_bien_changed();
+    void on_ety_rfc_bien_changed();
+    void on_btn_aplica_clicked();
+    void cierra_wizard();
 }*w1;

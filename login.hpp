@@ -5,7 +5,7 @@ class Login
 {
 private:
     Gtk::Window *window_glade;
-    Gtk::ComboBox *cb_usuarios;
+    Gtk::ComboBoxText *cb_usuarios;
     Gtk::Entry *ety_usuario;
     Gtk::Entry *ety_contrasena;
     Gtk::Button *btn_sesion;

@@ -1,15 +1,9 @@
-#include <fstream>
 #include <iostream>
-
-class leer_config
+#include "binary_file.hpp"
+class config
 {
 private:
-    typedef struct config
-    {
-        char *usuario;
-        char *servidor;
-        char *contrasena;
-    } *conf;
+    std::binaryfile myFile = "config.bin";
     std::string user;
     std::string server;
     std::string password;
@@ -17,6 +11,9 @@ public:
     std::string get_server();
     std::string get_user();
     std::string get_password();
-    leer_config();
-    ~leer_config();
+    void escribe_configuracion(std::string _user, std::string _server, std::string _password);
+    void lee_configuracion();
+    void inserta_usuario(std::string tipo,std::string nombre, std::string password);
+    config();
+    ~config();
 };

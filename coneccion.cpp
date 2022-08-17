@@ -2,29 +2,35 @@
 #include <fstream>
 #include <unistd.h>
 
+
 coneccion::coneccion()
 {
-    // properties["hostName"] = configuracion->get_server();
     properties["userName"] = configuracion->get_user();
     properties["password"] = configuracion->get_password();
     url = ("jdbc:mariadb://" + configuracion->get_server() + ":3306/Tienda");
     driver = sql::mariadb::get_driver_instance();
 }
 
-bool coneccion::conecta(std::string user, std::string password)
+coneccion::coneccion(std::string usuario, std::string contrasena)
+{
+    properties["userName"] = usuario;
+    properties["password"] = contrasena;
+    url = ("jdbc:mariadb://" + configuracion->get_server() + ":3306/Tienda");
+    driver = sql::mariadb::get_driver_instance();
+}
+
+bool coneccion::comprueba_gerente()
 {
     std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
-    std::unique_ptr<sql::PreparedStatement> stmnt(conn->prepareStatement("select nombre from usuarios where nombre=? and contrasena=md5(?)"));
-
-    stmnt->setString(1, user);
-    stmnt->setString(2, password);
+    std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
+    sql::ResultSet *res = stmnt->executeQuery("select nombre from usuarios where rol='Gerente'");
     conn->close();
-    return (stmnt->executeQuery()->first());
+    return (res->next());
 }
 
 bool coneccion::comprueba_configuracion()
 {
-    if (configuracion->get_password() == "" || configuracion->get_user() == "" || configuracion->get_server() == "")
+    if (configuracion->get_password().empty() || configuracion->get_user().empty() || configuracion->get_server().empty())
     {
         return false;
     }
@@ -38,24 +44,24 @@ bool coneccion::comprueba_configuracion_bienvenida(std::string user, std::string
 {
     properties["userName"] = user;
     properties["password"] = password;
-    url = ("jdbc:mariadb://" + server + ":3306/test");
-    driver = sql::mariadb::get_driver_instance();
+    url = ("jdbc:mariadb://" + server + ":3306");
     std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
     std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
-    sql::ResultSet *res = stmnt->executeQuery("show tables");
+    sql::ResultSet *res = stmnt->executeQuery("show databases");
+    stmnt->execute("create database if not exists Tienda");
+    conn->close();
     return (res->next());
 }
 
-void coneccion::instala_bd(std::string user, std::string password, std::string server)
+void coneccion::instala_bd()
 {
-    properties["userName"] = user;
-    properties["password"] = password;
-    url = ("jdbc:mariadb://" + server + ":3306/");
+    configuracion->lee_configuracion();
+    properties["userName"] = configuracion->get_user();
+    properties["password"] = configuracion->get_password();
+    url = ("jdbc:mariadb://" + configuracion->get_server() + ":3306/Tienda");
     driver = sql::mariadb::get_driver_instance();
     std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
     std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
-    stmnt->execute("create database if not exists Tienda");
-    stmnt->execute("use Tienda");
     stmnt->execute("DROP TABLE IF EXISTS Aud_producto");
     stmnt->execute("CREATE TABLE Aud_producto ("
                    "Id bigint(20) NOT NULL AUTO_INCREMENT,"
@@ -199,29 +205,17 @@ void coneccion::instala_bd(std::string user, std::string password, std::string s
                    "id int(11) NOT NULL AUTO_INCREMENT,"
                    "nombre varchar(50),"
                    "rol varchar(30),"
-                   "contrasena varchar(30),"
                    "PRIMARY KEY (id),"
                    "UNIQUE KEY nombre (nombre))");
     conn->close();
 }
 
-void coneccion::instala_bd_part2(std::string user, std::string password, std::string server)
+void coneccion::instala_bd_part2()
 {
-    properties["userName"] = user;
-    properties["password"] = password;
-    url = ("jdbc:mariadb://" + server + ":3306/");
-    driver = sql::mariadb::get_driver_instance();
     std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
     std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
-    stmnt->execute("use Tienda");
     stmnt->execute("DROP TABLE IF EXISTS Tienda");
-    stmnt->execute("CREATE TABLE Tienda ("
-                   "Id_tienda int(3) unsigned zerofill NOT NULL AUTO_INCREMENT,"
-                   "Nombre varchar(80),"
-                   "RFC varchar(45),"
-                   "Telefono bigint(20) DEFAULT NULL,"
-                   "icono varchar(45),"
-                   "PRIMARY KEY (Id_tienda)) ");
+    stmnt->execute("create table Tienda (id int unsigned zerofill AUTO_INCREMENT primary key, Nombre varchar(80), Telefono bigint, Direccion varchar(100), RFC varchar(100))");
     stmnt->execute("DROP TABLE IF EXISTS Venta_ini");
     stmnt->execute("CREATE TABLE Venta_ini ("
                    "V_dia double(9,2) DEFAULT NULL,"
@@ -232,6 +226,185 @@ void coneccion::instala_bd_part2(std::string user, std::string password, std::st
                    "V_dia double(9,2) DEFAULT NULL,"
                    "fecha date NOT NULL,"
                    "PRIMARY KEY (fecha))");
+    stmnt->execute("create OR REPLACE role Gerente");
+    stmnt->execute("grant ALL PRIVILEGES on *.* to Gerente with grant option");
+    stmnt->execute("create OR REPLACE role Lider");
+    stmnt->execute("grant ALL on *.* to Lider");
+    stmnt->execute("create OR REPLACE role Cajero");
+    stmnt->execute("grant select,update,insert on *.Carrito_compra to Cajero");
+    stmnt->execute("grant select,update on *.Producto to Cajero");
+    stmnt->execute("grant select,update,insert on *.Venta_ini to Cajero");
+    stmnt->execute("grant select,insert on *.Ticket to Cajero");
+    stmnt->execute("grant select on *.Tienda to Cajero");
     conn->close();
+}
 
+// recibe "Gerente" o "Lider" o "Cajero" , nombre de usuario y contraseña
+void coneccion::anade_usuario(std::string rol, std::string nombre, std::string password)
+{
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    if (rol == "Gerente" || rol == "Lider" || rol == "Cajero")
+    {
+        std::unique_ptr<sql::PreparedStatement> stmnt(conn->prepareStatement("insert usuarios values (null,?,?)"));
+        stmnt->setString(1, nombre);
+        stmnt->setString(2, rol);
+        stmnt->execute();
+        std::unique_ptr<sql::PreparedStatement> stmnt2(conn->prepareStatement("CREATE USER ?@localhost IDENTIFIED BY ?"));
+        stmnt2->setString(1, nombre);
+        stmnt2->setString(2, password);
+        stmnt2->execute();
+        std::unique_ptr<sql::PreparedStatement> stmnt3(conn->prepareStatement("GRANT ? TO ?@localhost"));
+        stmnt3->setString(1, rol);
+        stmnt3->setString(2, nombre);
+        stmnt3->execute();
+    }
+    else
+    {
+        std::cout << "Rol no valido" << std::endl;
+    }
+    conn->close();
+}
+
+
+std::vector <std::string> coneccion::lee_usuarios()
+{
+    std::vector <std::string> usuarios;
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
+    std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery("select nombre from usuarios"));
+    while (res->next())
+    {
+        usuarios.push_back(res->getString("nombre").c_str());
+    }
+    conn->close();
+    return usuarios;
+}
+
+std::vector <std::string> coneccion::lee_marca()
+{
+    std::vector <std::string> marca;
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
+    std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery("select Empresa from Proveedor"));
+    while (res->next())
+    {
+        marca.push_back(res->getString("Empresa").c_str());
+    }
+    conn->close();
+    return marca;
+}
+
+//Recibe nombre telefono y direccion de la tienda (opcional rfc (si es vacio ""))
+void coneccion::datos_tienda(std::string nombre, std::string telefono, std::string direccion, std::string rfc)
+{
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::PreparedStatement> stmnt(conn->prepareStatement("insert into Tienda values (null,?,?,?,?)"));
+    stmnt->setString(1, nombre);
+    stmnt->setString(2, telefono);
+    stmnt->setString(3, direccion);
+    stmnt->setString(4, rfc);
+    stmnt->executeQuery();
+    conn->close();
+}
+
+//devuelve un vector con los datos del usuario ya comprobado
+std::vector<std::string> coneccion::conecta(std::string user, std::string password)
+{
+    std::vector<std::string> datos;
+    properties["userName"] = user;
+    properties["password"] = password;
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::PreparedStatement> stmnt(conn->prepareStatement("select nombre,rol from usuarios where nombre=?"));
+    stmnt->setString(1, user);
+    std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery());
+    while (res->next())
+    {
+        datos.push_back(res->getString("nombre").c_str());
+        datos.push_back(res->getString("rol").c_str());
+    }
+    return datos;
+}
+
+coneccion::provedor *coneccion::get_proveedor()
+{
+        pro = new provedor();
+        std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+        std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
+        std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery("select * from Proveedor"));
+        while (res->next())
+        {
+            pro->Empresa.push_back(res->getString("Empresa").c_str());
+            pro->Nombre.push_back(res->getString("Nombre").c_str());
+            pro->Direccion.push_back(res->getString("Direccion").c_str());
+            pro->Telefono.push_back(res->getString("Telefono").c_str());
+            pro->Region.push_back(res->getString("Region").c_str());
+            pro->Pais.push_back(res->getString("Pais").c_str());
+            pro->RFC.push_back(res->getString("RFC").c_str());
+            pro->Estado.push_back(res->getString("Estado").c_str());
+            pro->Correo.push_back(res->getString("Correo").c_str());
+        }
+        conn->close();
+        return pro;
+}
+
+coneccion::productos *coneccion::get_productos()
+{
+    prod = new productos();
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
+    std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery("select * from Producto"));
+    while (res->next())
+    {
+        prod->SKU.push_back(res->getString("SKU").c_str());
+        prod->Nombre.push_back(res->getString("Nombre").c_str());
+        prod->Marca.push_back(res->getString("Marca").c_str());
+        prod->FechaP.push_back(res->getString("Fecha_proc").c_str());
+        prod->FechaC.push_back(res->getString("Fecha_cad").c_str());
+        prod->Lote.push_back(res->getString("Numero_lote").c_str());
+        prod->Nota.push_back(res->getString("Nota").c_str());
+        prod->Piezas.push_back(res->getString("Piezas").c_str());
+        prod->Compra.push_back(res->getString("Compra").c_str());
+        prod->Venta.push_back(res->getString("Venta").c_str());
+        prod->Categoria.push_back(res->getString("Categoria").c_str());
+        prod->Subcategoria.push_back(res->getString("Subcategoria").c_str());
+    }
+    conn->close();
+    return prod;
+}
+
+void coneccion::set_proveedor(std::string empresa, std::string nombre, std::string direccion, std::string telefono, std::string region, std::string pais, std::string rfc, std::string estado, std::string correo)
+{
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::PreparedStatement> stmnt(conn->prepareStatement("insert into Proveedor values (?,?,?,?,?,?,?,?,?)"));
+    stmnt->setString(1, empresa);
+    stmnt->setString(2, nombre);
+    stmnt->setString(3, direccion);
+    stmnt->setBigInt(4, telefono);
+    stmnt->setString(5, region);
+    stmnt->setString(6, pais);
+    stmnt->setString(7, rfc);
+    stmnt->setString(8, estado);
+    stmnt->setString(9, correo);
+    stmnt->executeQuery();
+    conn->close();
+}
+
+void coneccion::set_producto(std::string sku,std::string nombre,std::string marca,std::string fecha_p,std::string fecha_c,std::string lote,std::string nota,
+                    std::string piezas,std::string compra,std::string venta,std::string categoria,std::string subcategoria){
+    std::unique_ptr<sql::Connection> conn(driver->connect(url, properties));
+    std::unique_ptr<sql::PreparedStatement> stmnt(conn->prepareStatement("insert into Producto values (?,?,?,?,?,?,?,?,?,?,?,?)"));
+    stmnt->setBigInt(1,sku);
+    stmnt->setString(2,nombre);
+    stmnt->setString(3,marca);
+    stmnt->setString(4,fecha_p);
+    stmnt->setString(5,fecha_c);
+    stmnt->setString(6,lote);
+    stmnt->setString(7,nota);
+    stmnt->setDouble(8,atof(piezas.c_str()));
+    stmnt->setDouble(9,atof(compra.c_str()));
+    stmnt->setDouble(10,atof(venta.c_str()));
+    stmnt->setString(11,categoria);
+    stmnt->setString(12,subcategoria);
+    stmnt->executeQuery();
+    stmnt->close();
 }
